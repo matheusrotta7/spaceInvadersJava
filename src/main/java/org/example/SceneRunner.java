@@ -4,6 +4,8 @@ import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -21,6 +23,7 @@ public class SceneRunner extends Canvas implements Runnable {
     private int playerY = 100;
     private final int MOVE_SPEED = 5;
     private final int FPS = 120;
+    private final int BULLET_COOLDOWN = 150;
 
     private BufferedImage shipImage;      // loaded once at startup
     private BufferedImage backBuffer;     // off-screen buffer for double buffering
@@ -70,6 +73,7 @@ public class SceneRunner extends Canvas implements Runnable {
     public void run() {
         long frameDelay = 1000 / FPS;
 
+        long saveLastTimeMillis = 0;
         while (true) {
             try {
                 Thread.sleep(frameDelay);
@@ -82,13 +86,24 @@ public class SceneRunner extends Canvas implements Runnable {
             if (movingRight) playerX += MOVE_SPEED;
             if (movingDown) playerY += MOVE_SPEED;
             if (movingUp) playerY -= MOVE_SPEED;
+
+            long currentTimeMillis = System.currentTimeMillis();
             if (shootingBullets) {
-                spawnBullet(playerX, playerY);
+                if (Math.abs(saveLastTimeMillis - currentTimeMillis) > BULLET_COOLDOWN  || saveLastTimeMillis == 0L) {
+                    spawnBullet(playerX, playerY);
+                    saveLastTimeMillis = System.currentTimeMillis();
+                }
             }
 
             for (GameObject gameObject : activeGameObjects) {
                 if (gameObject.getTag().equals("bullet")) {
-                    gameObject.setY(gameObject.getY()-1);
+                    gameObject.setY(gameObject.getY() + gameObject.getSpeed());
+                    if (gameObject.getAccelerationDamperCounter() == gameObject.getAccelerationDamper()) {
+                        gameObject.setSpeed(gameObject.getSpeed() + gameObject.getAcceleration());
+                        gameObject.setAccelerationDamperCounter(0);
+                    } else {
+                        gameObject.setAccelerationDamperCounter(gameObject.getAccelerationDamperCounter()+1);
+                    }
                 }
             }
 
@@ -103,7 +118,7 @@ public class SceneRunner extends Canvas implements Runnable {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        this.activeGameObjects.add(new GameObject(playerX, playerY, 30, 30, buf, "bullet"));
+        this.activeGameObjects.add(new GameObject(playerX, playerY, 30, 30, buf, "bullet", -3, -3, 10));
     }
 
     // ── Constructor ────────────────────────────────────────────────────────────
@@ -150,8 +165,8 @@ public class SceneRunner extends Canvas implements Runnable {
             }
         });
 
-        frame.addWindowListener(new java.awt.event.WindowAdapter() {
-            public void windowClosing(java.awt.event.WindowEvent e) {
+        frame.addWindowListener(new WindowAdapter() {
+            public void windowClosing(WindowEvent e) {
                 System.exit(0);
             }
         });
