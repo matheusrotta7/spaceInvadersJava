@@ -19,8 +19,8 @@ public class SceneRunner extends Canvas implements Runnable {
     private boolean movingDown = false;
     private boolean shootingBullets = false;
 
-    private int playerX = 100;
-    private int playerY = 100;
+    private int playerX = 800;
+    private int playerY = 800;
     private final int MOVE_SPEED = 5;
     private final int FPS = 120;
     private final int BULLET_COOLDOWN = 150;
@@ -59,7 +59,14 @@ public class SceneRunner extends Canvas implements Runnable {
         }
 
         for (GameObject gameObject : activeGameObjects) {
-            g2.drawImage(gameObject.getSprite(), gameObject.getX(), gameObject.getY(), gameObject.getWidth(), gameObject.getHeight(), null);
+
+            if (gameObject.getTag().equals("enemy_ship_4")) { //todo fix 180 degrees rotation
+//                g2.setTransform(new AffineTransform(-1.0, 0.0, 0.0, 1.0, 0.0, 0.0));
+                g2.drawImage(gameObject.getSprite(), gameObject.getX(), gameObject.getY(), gameObject.getWidth(), gameObject.getHeight(), null);
+//                g2.setTransform(new AffineTransform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0));
+            } else {
+                g2.drawImage(gameObject.getSprite(), gameObject.getX(), gameObject.getY(), gameObject.getWidth(), gameObject.getHeight(), null);
+            }
 
         }
         g2.dispose();
@@ -107,8 +114,34 @@ public class SceneRunner extends Canvas implements Runnable {
                 }
             }
 
+
+            for (int i = 0; i < activeGameObjects.size(); i++) {
+                GameObject curGameObject = activeGameObjects.get(i);
+                if (curGameObject.getTag().equals("bullet") || curGameObject.getTag().equals("enemy_ship_4")) {
+                    for (int j = i + 1; j < activeGameObjects.size(); j++) {
+                        GameObject otherGameObject = activeGameObjects.get(j);
+                        if (gameObjectsOverlap(curGameObject, otherGameObject)) {
+                            if ((curGameObject.getTag().equals("bullet") && otherGameObject.getTag().equals("enemy_ship_4"))
+                                    ||
+                                (curGameObject.getTag().equals("enemy_ship_4") && otherGameObject.getTag().equals("bullet"))
+                            ) {
+                                activeGameObjects.remove(curGameObject);
+                                activeGameObjects.remove(otherGameObject);
+                            }
+                        }
+                    }
+                }
+            }
+
             repaint();
         }
+    }
+
+    boolean gameObjectsOverlap(GameObject a, GameObject b) {
+        return a.getX()              < b.getX() + b.getWidth()  &&
+                a.getX() + a.getWidth()  > b.getX()              &&
+                a.getY()              < b.getY() + b.getHeight() &&
+                a.getY() + a.getHeight() > b.getY();
     }
 
     private void spawnBullet(int playerX, int playerY) {
@@ -118,7 +151,7 @@ public class SceneRunner extends Canvas implements Runnable {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        this.activeGameObjects.add(new GameObject(playerX, playerY, 30, 30, buf, "bullet", -3, -3, 10));
+        this.activeGameObjects.add(new GameObject(playerX+33, playerY-8, 30, 30, buf, "bullet", -3, -3, 10));
     }
 
     // ── Constructor ────────────────────────────────────────────────────────────
@@ -136,6 +169,14 @@ public class SceneRunner extends Canvas implements Runnable {
         animThread.start();
         setBackground(Color.BLACK);
         this.activeGameObjects = new ArrayList<>();
+
+        BufferedImage enemyShip4Sprite = null;
+        try {
+            enemyShip4Sprite = ImageIO.read(new File("src/main/java/org/example/SpaceShips/Ship_4.png"));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        this.activeGameObjects.add(new GameObject(100, 100, 96, 96, enemyShip4Sprite, "enemy_ship_4", 0, 0, 0));
     }
 
     // ── Entry point ────────────────────────────────────────────────────────────
