@@ -6,7 +6,6 @@ import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -17,6 +16,7 @@ public class SceneRunner extends Canvas implements Runnable {
 
     public static final int BULLET_WIDTH = 50;
     public static final int BULLET_HEIGHT = 80;
+    private static final double ENEMY_SHIP_MOVE_SPEED = 4;
     Logger logger = Logger.getLogger(SceneRunner.class.toString());
 
     public static final int SCREEN_WIDTH = 1920;
@@ -36,7 +36,9 @@ public class SceneRunner extends Canvas implements Runnable {
     private final int FPS = 120;
     private final int BULLET_COOLDOWN = 150;
 
-    private BufferedImage shipImage;      // loaded once at startup
+    private BufferedImage shipImage;
+    private BufferedImage bulletSpriteImage;
+    private BufferedImage enemyShipImage;
     private BufferedImage backBuffer;     // off-screen buffer for double buffering
 
     private ArrayList<GameObject> activeGameObjects;
@@ -70,15 +72,7 @@ public class SceneRunner extends Canvas implements Runnable {
         }
 
         for (GameObject gameObject : activeGameObjects) {
-
-            if (gameObject.getTag().equals(ENEMY_SHIP_4)) {
-                BufferedImage spriteImage = gameObject.getSprite();
-                BufferedImage rotatedSpriteImage = ImageUtilities.rotateBy(spriteImage, ImageUtilities.Direction.SOUTH);
-                g2.drawImage(rotatedSpriteImage, gameObject.getX(), gameObject.getY(), gameObject.getWidth(), gameObject.getHeight(), null);
-            } else {
-                g2.drawImage(gameObject.getSprite(), gameObject.getX(), gameObject.getY(), gameObject.getWidth(), gameObject.getHeight(), null);
-            }
-
+            g2.drawImage(gameObject.getSprite(), (int) Math.floor(gameObject.getPosition().getX()), (int) Math.floor(gameObject.getPosition().getY()), gameObject.getWidth(), gameObject.getHeight(), null);
         }
         g2.dispose();
 
@@ -121,7 +115,25 @@ public class SceneRunner extends Canvas implements Runnable {
                 }
             }
 
-            updateBulletPositionsAndRemoveOffSceneBullets();
+            enemyShipMovement();
+
+            ArrayList<GameObject> bulletsToBeRemoved = new ArrayList<>();
+            for (GameObject gameObject : activeGameObjects) {
+                if (gameObject.getTag().equals(BULLET) || gameObject.getTag().equals(ENEMY_SHIP_4)) {
+                    gameObject.setPosition(Vector2D.sum(gameObject.getPosition(), gameObject.getSpeed()));
+                    if (gameObject.getPosition().getY() < 0) {
+                        bulletsToBeRemoved.add(gameObject);
+                    }
+                    if (gameObject.getAccelerationDamperCounter() == gameObject.getAccelerationDamper()) {
+                        gameObject.setSpeed(Vector2D.sum(gameObject.getSpeed(),gameObject.getAcceleration()));
+                        gameObject.setAccelerationDamperCounter(0);
+                    } else {
+                        gameObject.setAccelerationDamperCounter(gameObject.getAccelerationDamperCounter()+1);
+                    }
+                }
+            }
+            activeGameObjects.removeAll(bulletsToBeRemoved);
+
             detectCollisionsBetweenBulletsAndEnemyShips();
 //            logger.info("Number of active gameobjects: " + activeGameObjects.size());
 
@@ -129,23 +141,16 @@ public class SceneRunner extends Canvas implements Runnable {
         }
     }
 
-    private void updateBulletPositionsAndRemoveOffSceneBullets() {
-        ArrayList<GameObject> bulletsToBeRemoved = new ArrayList<>();
+    private void enemyShipMovement() {
         for (GameObject gameObject : activeGameObjects) {
-            if (gameObject.getTag().equals(BULLET)) {
-                gameObject.setY(gameObject.getY() + gameObject.getSpeed());
-                if (gameObject.getY() < 0) {
-                    bulletsToBeRemoved.add(gameObject);
-                }
-                if (gameObject.getAccelerationDamperCounter() == gameObject.getAccelerationDamper()) {
-                    gameObject.setSpeed(gameObject.getSpeed() + gameObject.getAcceleration());
-                    gameObject.setAccelerationDamperCounter(0);
-                } else {
-                    gameObject.setAccelerationDamperCounter(gameObject.getAccelerationDamperCounter()+1);
+            if (gameObject.getTag().equals(ENEMY_SHIP_4)) {
+                if (gameObject.getPosition().getX() > SCREEN_WIDTH - SHIP_SPRITE_SIZE) {
+                    gameObject.setSpeed(new Vector2D(-ENEMY_SHIP_MOVE_SPEED, 0));
+                } else if (gameObject.getPosition().getX() < 0) {
+                    gameObject.setSpeed(new Vector2D(ENEMY_SHIP_MOVE_SPEED, 0));
                 }
             }
         }
-        activeGameObjects.removeAll(bulletsToBeRemoved);
     }
 
     private void detectCollisionsBetweenBulletsAndEnemyShips() {
@@ -169,21 +174,14 @@ public class SceneRunner extends Canvas implements Runnable {
     }
 
     boolean gameObjectsOverlap(GameObject a, GameObject b) {
-        return a.getX()              < b.getX() + b.getWidth()  &&
-                a.getX() + a.getWidth()  > b.getX()              &&
-                a.getY()              < b.getY() + b.getHeight() &&
-                a.getY() + a.getHeight() > b.getY();
+        return a.getPosition().getX()              < b.getPosition().getX() + b.getWidth()  &&
+                a.getPosition().getX() + a.getWidth()  > b.getPosition().getX()              &&
+                a.getPosition().getY()              < b.getPosition().getY() + b.getHeight() &&
+                a.getPosition().getY() + a.getHeight() > b.getPosition().getY();
     }
 
     private void spawnBullet(int playerX, int playerY) {
-        BufferedImage bulletSprite = null;
-        try {
-            bulletSprite = ImageIO.read(new File("src/main/java/org/example/LaserSprites/01.png"));
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-        BufferedImage rotatedBulletSprite = ImageUtilities.rotateBy(bulletSprite, ImageUtilities.Direction.WEST);
-        this.activeGameObjects.add(new GameObject(playerX+33, playerY-8, BULLET_WIDTH, BULLET_HEIGHT, rotatedBulletSprite, BULLET, -3, -3, 10));
+        this.activeGameObjects.add(new GameObject(new Vector2D(playerX+33, playerY-8), BULLET_WIDTH, BULLET_HEIGHT, bulletSpriteImage, BULLET, new Vector2D(0, -3), new Vector2D(0,-3), 10));
     }
 
     // ── Constructor ────────────────────────────────────────────────────────────
@@ -202,13 +200,25 @@ public class SceneRunner extends Canvas implements Runnable {
         setBackground(Color.BLACK);
         this.activeGameObjects = new ArrayList<>();
 
-        BufferedImage enemyShip4Sprite = null;
+
+
+        BufferedImage bulletSprite = null;
         try {
-            enemyShip4Sprite = ImageIO.read(new File("src/main/java/org/example/SpaceShips/Ship_4.png"));
+            bulletSprite = ImageIO.read(new File("src/main/java/org/example/LaserSprites/01.png"));
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        this.activeGameObjects.add(new GameObject(100, 100, SHIP_SPRITE_SIZE, SHIP_SPRITE_SIZE, enemyShip4Sprite, ENEMY_SHIP_4, 0, 0, 0));
+        bulletSpriteImage = ImageUtilities.rotateBy(bulletSprite, ImageUtilities.Direction.WEST);
+
+
+        try {
+            enemyShipImage = ImageIO.read(new File("src/main/java/org/example/SpaceShips/Ship_4.png"));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        BufferedImage rotatedEnemyShipImage = ImageUtilities.rotateBy(enemyShipImage, ImageUtilities.Direction.SOUTH);
+
+        this.activeGameObjects.add(new GameObject(new Vector2D(100, 100), SHIP_SPRITE_SIZE, SHIP_SPRITE_SIZE, rotatedEnemyShipImage, ENEMY_SHIP_4, new Vector2D(ENEMY_SHIP_MOVE_SPEED, 0), new Vector2D(0, 0), 0));
     }
 
     // ── Entry point ────────────────────────────────────────────────────────────
