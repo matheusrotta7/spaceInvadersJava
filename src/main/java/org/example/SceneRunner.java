@@ -6,6 +6,7 @@ import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -14,6 +15,8 @@ import java.util.logging.Logger;
 
 public class SceneRunner extends Canvas implements Runnable {
 
+    public static final int BULLET_WIDTH = 50;
+    public static final int BULLET_HEIGHT = 80;
     Logger logger = Logger.getLogger(SceneRunner.class.toString());
 
     public static final int SCREEN_WIDTH = 1920;
@@ -68,10 +71,10 @@ public class SceneRunner extends Canvas implements Runnable {
 
         for (GameObject gameObject : activeGameObjects) {
 
-            if (gameObject.getTag().equals(ENEMY_SHIP_4)) { //todo fix 180 degrees rotation
-//                g2.setTransform(new AffineTransform(-1.0, 0.0, 0.0, 1.0, 0.0, 0.0));
-                g2.drawImage(gameObject.getSprite(), gameObject.getX(), gameObject.getY(), gameObject.getWidth(), gameObject.getHeight(), null);
-//                g2.setTransform(new AffineTransform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0));
+            if (gameObject.getTag().equals(ENEMY_SHIP_4)) {
+                BufferedImage spriteImage = gameObject.getSprite();
+                BufferedImage rotatedSpriteImage = ImageUtilities.rotateBy(spriteImage, ImageUtilities.Direction.SOUTH);
+                g2.drawImage(rotatedSpriteImage, gameObject.getX(), gameObject.getY(), gameObject.getWidth(), gameObject.getHeight(), null);
             } else {
                 g2.drawImage(gameObject.getSprite(), gameObject.getX(), gameObject.getY(), gameObject.getWidth(), gameObject.getHeight(), null);
             }
@@ -173,13 +176,14 @@ public class SceneRunner extends Canvas implements Runnable {
     }
 
     private void spawnBullet(int playerX, int playerY) {
-        BufferedImage buf = null;
+        BufferedImage bulletSprite = null;
         try {
-            buf = ImageIO.read(new File("src/main/java/org/example/LaserSprites/01.png"));
+            bulletSprite = ImageIO.read(new File("src/main/java/org/example/LaserSprites/01.png"));
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        this.activeGameObjects.add(new GameObject(playerX+33, playerY-8, 30, 30, buf, BULLET, -3, -3, 10));
+        BufferedImage rotatedBulletSprite = ImageUtilities.rotateBy(bulletSprite, ImageUtilities.Direction.WEST);
+        this.activeGameObjects.add(new GameObject(playerX+33, playerY-8, BULLET_WIDTH, BULLET_HEIGHT, rotatedBulletSprite, BULLET, -3, -3, 10));
     }
 
     // ── Constructor ────────────────────────────────────────────────────────────
