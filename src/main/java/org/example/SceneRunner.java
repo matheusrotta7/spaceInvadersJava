@@ -10,9 +10,17 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.logging.Logger;
 
 public class SceneRunner extends Canvas implements Runnable {
 
+    Logger logger = Logger.getLogger(SceneRunner.class.toString());
+
+    public static final int SCREEN_WIDTH = 1920;
+    public static final int SCREEN_HEIGHT = 1080;
+    public static final int SHIP_SPRITE_SIZE = 96;
+    public static final String ENEMY_SHIP_4 = "enemy_ship_4";
+    public static final String BULLET = "bullet";
     private boolean movingLeft  = false;
     private boolean movingRight = false;
     private boolean movingUp = false;
@@ -55,12 +63,12 @@ public class SceneRunner extends Canvas implements Runnable {
         if (shipImage != null) {
             int scale = 1;
             g2.drawImage(shipImage, playerX, playerY,
-                    96 * scale, 96 * scale, null);
+                    SHIP_SPRITE_SIZE * scale, SHIP_SPRITE_SIZE * scale, null);
         }
 
         for (GameObject gameObject : activeGameObjects) {
 
-            if (gameObject.getTag().equals("enemy_ship_4")) { //todo fix 180 degrees rotation
+            if (gameObject.getTag().equals(ENEMY_SHIP_4)) { //todo fix 180 degrees rotation
 //                g2.setTransform(new AffineTransform(-1.0, 0.0, 0.0, 1.0, 0.0, 0.0));
                 g2.drawImage(gameObject.getSprite(), gameObject.getX(), gameObject.getY(), gameObject.getWidth(), gameObject.getHeight(), null);
 //                g2.setTransform(new AffineTransform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0));
@@ -89,10 +97,18 @@ public class SceneRunner extends Canvas implements Runnable {
                 break;
             }
 
-            if (movingLeft)  playerX -= MOVE_SPEED;
-            if (movingRight) playerX += MOVE_SPEED;
-            if (movingDown) playerY += MOVE_SPEED;
-            if (movingUp) playerY -= MOVE_SPEED;
+            if (movingLeft && playerX > 0) {
+                playerX -= MOVE_SPEED;
+            }
+            if (movingRight && playerX < SCREEN_WIDTH - SHIP_SPRITE_SIZE - 20) {
+                playerX += MOVE_SPEED;
+            }
+            if (movingDown && playerY < SCREEN_HEIGHT - SHIP_SPRITE_SIZE - SHIP_SPRITE_SIZE) {
+                playerY += MOVE_SPEED;
+            }
+            if (movingUp && playerY > 0) {
+                playerY -= MOVE_SPEED;
+            }
 
             long currentTimeMillis = System.currentTimeMillis();
             if (shootingBullets) {
@@ -102,38 +118,50 @@ public class SceneRunner extends Canvas implements Runnable {
                 }
             }
 
-            for (GameObject gameObject : activeGameObjects) {
-                if (gameObject.getTag().equals("bullet")) {
-                    gameObject.setY(gameObject.getY() + gameObject.getSpeed());
-                    if (gameObject.getAccelerationDamperCounter() == gameObject.getAccelerationDamper()) {
-                        gameObject.setSpeed(gameObject.getSpeed() + gameObject.getAcceleration());
-                        gameObject.setAccelerationDamperCounter(0);
-                    } else {
-                        gameObject.setAccelerationDamperCounter(gameObject.getAccelerationDamperCounter()+1);
-                    }
+            updateBulletPositionsAndRemoveOffSceneBullets();
+            detectCollisionsBetweenBulletsAndEnemyShips();
+//            logger.info("Number of active gameobjects: " + activeGameObjects.size());
+
+            repaint();
+        }
+    }
+
+    private void updateBulletPositionsAndRemoveOffSceneBullets() {
+        ArrayList<GameObject> bulletsToBeRemoved = new ArrayList<>();
+        for (GameObject gameObject : activeGameObjects) {
+            if (gameObject.getTag().equals(BULLET)) {
+                gameObject.setY(gameObject.getY() + gameObject.getSpeed());
+                if (gameObject.getY() < 0) {
+                    bulletsToBeRemoved.add(gameObject);
+                }
+                if (gameObject.getAccelerationDamperCounter() == gameObject.getAccelerationDamper()) {
+                    gameObject.setSpeed(gameObject.getSpeed() + gameObject.getAcceleration());
+                    gameObject.setAccelerationDamperCounter(0);
+                } else {
+                    gameObject.setAccelerationDamperCounter(gameObject.getAccelerationDamperCounter()+1);
                 }
             }
+        }
+        activeGameObjects.removeAll(bulletsToBeRemoved);
+    }
 
-
-            for (int i = 0; i < activeGameObjects.size(); i++) {
-                GameObject curGameObject = activeGameObjects.get(i);
-                if (curGameObject.getTag().equals("bullet") || curGameObject.getTag().equals("enemy_ship_4")) {
-                    for (int j = i + 1; j < activeGameObjects.size(); j++) {
-                        GameObject otherGameObject = activeGameObjects.get(j);
-                        if (gameObjectsOverlap(curGameObject, otherGameObject)) {
-                            if ((curGameObject.getTag().equals("bullet") && otherGameObject.getTag().equals("enemy_ship_4"))
-                                    ||
-                                (curGameObject.getTag().equals("enemy_ship_4") && otherGameObject.getTag().equals("bullet"))
-                            ) {
-                                activeGameObjects.remove(curGameObject);
-                                activeGameObjects.remove(otherGameObject);
-                            }
+    private void detectCollisionsBetweenBulletsAndEnemyShips() {
+        for (int i = 0; i < activeGameObjects.size(); i++) {
+            GameObject curGameObject = activeGameObjects.get(i);
+            if (curGameObject.getTag().equals(BULLET) || curGameObject.getTag().equals(ENEMY_SHIP_4)) { //"collidable" objects for now
+                for (int j = i + 1; j < activeGameObjects.size(); j++) {
+                    GameObject otherGameObject = activeGameObjects.get(j);
+                    if (gameObjectsOverlap(curGameObject, otherGameObject)) {
+                        if ((curGameObject.getTag().equals(BULLET) && otherGameObject.getTag().equals(ENEMY_SHIP_4))
+                                ||
+                            (curGameObject.getTag().equals(ENEMY_SHIP_4) && otherGameObject.getTag().equals(BULLET))
+                        ) {
+                            activeGameObjects.remove(curGameObject);
+                            activeGameObjects.remove(otherGameObject);
                         }
                     }
                 }
             }
-
-            repaint();
         }
     }
 
@@ -151,7 +179,7 @@ public class SceneRunner extends Canvas implements Runnable {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        this.activeGameObjects.add(new GameObject(playerX+33, playerY-8, 30, 30, buf, "bullet", -3, -3, 10));
+        this.activeGameObjects.add(new GameObject(playerX+33, playerY-8, 30, 30, buf, BULLET, -3, -3, 10));
     }
 
     // ── Constructor ────────────────────────────────────────────────────────────
@@ -176,7 +204,7 @@ public class SceneRunner extends Canvas implements Runnable {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        this.activeGameObjects.add(new GameObject(100, 100, 96, 96, enemyShip4Sprite, "enemy_ship_4", 0, 0, 0));
+        this.activeGameObjects.add(new GameObject(100, 100, SHIP_SPRITE_SIZE, SHIP_SPRITE_SIZE, enemyShip4Sprite, ENEMY_SHIP_4, 0, 0, 0));
     }
 
     // ── Entry point ────────────────────────────────────────────────────────────
@@ -184,7 +212,7 @@ public class SceneRunner extends Canvas implements Runnable {
         Frame frame = new Frame("Sprite Visualization");
         SceneRunner game = new SceneRunner();
         frame.add(game);
-        frame.setSize(1920, 1080);
+        frame.setSize(SCREEN_WIDTH, SCREEN_HEIGHT);
         frame.setVisible(true);
 
         frame.addKeyListener(new KeyAdapter() {
