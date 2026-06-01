@@ -14,16 +14,24 @@ import java.util.logging.Logger;
 
 public class SceneRunner extends Canvas implements Runnable {
 
+    private static final Logger logger = Logger.getLogger(SceneRunner.class.toString());
+
     public static final int BULLET_WIDTH = 50;
     public static final int BULLET_HEIGHT = 80;
     private static final double ENEMY_SHIP_MOVE_SPEED = 4;
-    Logger logger = Logger.getLogger(SceneRunner.class.toString());
 
     public static final int SCREEN_WIDTH = 1920;
     public static final int SCREEN_HEIGHT = 1080;
     public static final int SHIP_SPRITE_SIZE = 96;
+    public static final String ENEMY_BULLET = "ENEMY_BULLET";
+    public static final int ENEMY_BULLET_SPEED_VERTICAL = +3;
+    public static final int ENEMY_BULLET_SPEED_HORIZONTAL = 1;
+    private final int MOVE_SPEED = 5;
+    private final int FPS = 120;
+    private final int BULLET_COOLDOWN = 150;
     public static final String ENEMY_SHIP_4 = "enemy_ship_4";
     public static final String BULLET = "bullet";
+
     private boolean movingLeft  = false;
     private boolean movingRight = false;
     private boolean movingUp = false;
@@ -32,16 +40,92 @@ public class SceneRunner extends Canvas implements Runnable {
 
     private int playerX = 800;
     private int playerY = 800;
-    private final int MOVE_SPEED = 5;
-    private final int FPS = 120;
-    private final int BULLET_COOLDOWN = 150;
 
     private BufferedImage shipImage;
     private BufferedImage bulletSpriteImage;
     private BufferedImage enemyShipImage;
+    private BufferedImage enemyBulletImage;
     private BufferedImage backBuffer;     // off-screen buffer for double buffering
 
     private ArrayList<GameObject> activeGameObjects;
+
+    // ── Constructor ────────────────────────────────────────────────────────────
+    public SceneRunner() {
+        // Load image once here, not on every paint call
+        try {
+            shipImage = ImageIO.read(
+                    new File("src/main/java/org/example/SpaceShips/Ship_1.png"));
+        } catch (IOException e) {
+            throw new RuntimeException("Could not load ship image", e);
+        }
+
+        Thread animThread = new Thread(this);
+        animThread.setDaemon(true);
+        animThread.start();
+        setBackground(Color.BLACK);
+        this.activeGameObjects = new ArrayList<>();
+
+
+
+        BufferedImage bulletSprite = null;
+        try {
+            bulletSprite = ImageIO.read(new File("src/main/java/org/example/LaserSprites/01.png"));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        bulletSpriteImage = ImageUtilities.rotateBy(bulletSprite, ImageUtilities.Direction.WEST);
+
+
+        try {
+            enemyShipImage = ImageIO.read(new File("src/main/java/org/example/SpaceShips/Ship_4.png"));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        BufferedImage rotatedEnemyShipImage = ImageUtilities.rotateBy(enemyShipImage, ImageUtilities.Direction.SOUTH);
+
+        try {
+            enemyBulletImage = ImageIO.read(new File("src/main/java/org/example/LaserSprites/12.png"));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        enemyBulletImage = ImageUtilities.rotateBy(enemyBulletImage, ImageUtilities.Direction.EAST);
+
+        this.activeGameObjects.add(new GameObject(new Vector2D(100, 100), SHIP_SPRITE_SIZE, SHIP_SPRITE_SIZE, rotatedEnemyShipImage, ENEMY_SHIP_4, new Vector2D(ENEMY_SHIP_MOVE_SPEED, 0), new Vector2D(0, 0), 0));
+    }
+
+    // ── Entry point ────────────────────────────────────────────────────────────
+    public static void main(String[] args) {
+        Frame frame = new Frame("Sprite Visualization");
+        SceneRunner game = new SceneRunner();
+        frame.add(game);
+        frame.setSize(SCREEN_WIDTH, SCREEN_HEIGHT);
+        frame.setVisible(true);
+
+        frame.addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_A)     game.movingLeft  = true;
+                if (e.getKeyCode() == KeyEvent.VK_D)     game.movingRight = true;
+                if (e.getKeyCode() == KeyEvent.VK_S)     game.movingDown = true;
+                if (e.getKeyCode() == KeyEvent.VK_W)     game.movingUp = true;
+                if (e.getKeyCode() == KeyEvent.VK_SPACE) game.shootingBullets = true;
+            }
+            @Override
+            public void keyReleased(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_A)     game.movingLeft  = false;
+                if (e.getKeyCode() == KeyEvent.VK_D)     game.movingRight = false;
+                if (e.getKeyCode() == KeyEvent.VK_S)     game.movingDown = false;
+                if (e.getKeyCode() == KeyEvent.VK_W)     game.movingUp = false;
+                if (e.getKeyCode() == KeyEvent.VK_SPACE) game.shootingBullets = false;
+            }
+        });
+
+        frame.addWindowListener(new WindowAdapter() {
+            public void windowClosing(WindowEvent e) {
+                System.exit(0);
+            }
+        });
+    }
 
     // ── Double-buffered paint ──────────────────────────────────────────────────
     @Override
@@ -66,9 +150,8 @@ public class SceneRunner extends Canvas implements Runnable {
         g2.fillRect(0, 0, getWidth(), getHeight());   // clear
 
         if (shipImage != null) {
-            int scale = 1;
             g2.drawImage(shipImage, playerX, playerY,
-                    SHIP_SPRITE_SIZE * scale, SHIP_SPRITE_SIZE * scale, null);
+                    SHIP_SPRITE_SIZE, SHIP_SPRITE_SIZE, null);
         }
 
         for (GameObject gameObject : activeGameObjects) {
@@ -117,28 +200,58 @@ public class SceneRunner extends Canvas implements Runnable {
 
             enemyShipMovement();
 
-            ArrayList<GameObject> bulletsToBeRemoved = new ArrayList<>();
-            for (GameObject gameObject : activeGameObjects) {
-                if (gameObject.getTag().equals(BULLET) || gameObject.getTag().equals(ENEMY_SHIP_4)) {
-                    gameObject.setPosition(Vector2D.sum(gameObject.getPosition(), gameObject.getSpeed()));
-                    if (gameObject.getPosition().getY() < 0) {
-                        bulletsToBeRemoved.add(gameObject);
-                    }
-                    if (gameObject.getAccelerationDamperCounter() == gameObject.getAccelerationDamper()) {
-                        gameObject.setSpeed(Vector2D.sum(gameObject.getSpeed(),gameObject.getAcceleration()));
-                        gameObject.setAccelerationDamperCounter(0);
-                    } else {
-                        gameObject.setAccelerationDamperCounter(gameObject.getAccelerationDamperCounter()+1);
-                    }
+            currentTimeMillis = System.currentTimeMillis();
+            if (true) {
+                if (Math.abs(saveLastTimeMillis - currentTimeMillis) > BULLET_COOLDOWN  || saveLastTimeMillis == 0L) {
+                    enemyShipFireShots();
+                    saveLastTimeMillis = System.currentTimeMillis();
                 }
             }
-            activeGameObjects.removeAll(bulletsToBeRemoved);
-
+            gameObjectCinematicsAndOffsceneRemoval();
             detectCollisionsBetweenBulletsAndEnemyShips();
 //            logger.info("Number of active gameobjects: " + activeGameObjects.size());
 
             repaint();
         }
+    }
+
+    private void enemyShipFireShots() {
+        GameObject enemyShip = retrieveGameObjectWithTag(ENEMY_SHIP_4);
+        if (enemyShip == null) {
+            return;
+        }
+        this.activeGameObjects.add(new GameObject(enemyShip.getPosition(), BULLET_WIDTH, BULLET_HEIGHT, enemyBulletImage, ENEMY_BULLET, new Vector2D(0, ENEMY_BULLET_SPEED_VERTICAL), new Vector2D(0, 0), 0));
+        this.activeGameObjects.add(new GameObject(enemyShip.getPosition(), BULLET_WIDTH, BULLET_HEIGHT, enemyBulletImage, ENEMY_BULLET, new Vector2D(-ENEMY_BULLET_SPEED_HORIZONTAL, ENEMY_BULLET_SPEED_VERTICAL), new Vector2D(0, 0), 0));
+        this.activeGameObjects.add(new GameObject(enemyShip.getPosition(), BULLET_WIDTH, BULLET_HEIGHT, enemyBulletImage, ENEMY_BULLET, new Vector2D(+ENEMY_BULLET_SPEED_HORIZONTAL, ENEMY_BULLET_SPEED_VERTICAL), new Vector2D(0, 0), 0));
+    }
+
+    private GameObject retrieveGameObjectWithTag(String tag) {
+        for (GameObject gameObject : activeGameObjects) {
+            if (gameObject.getTag().equals(tag)) {
+                return gameObject;
+            }
+        }
+
+        return null;
+    }
+
+    private void gameObjectCinematicsAndOffsceneRemoval() {
+        ArrayList<GameObject> bulletsToBeRemoved = new ArrayList<>();
+        for (GameObject gameObject : activeGameObjects) {
+            if (true) {
+                gameObject.setPosition(Vector2D.sum(gameObject.getPosition(), gameObject.getSpeed()));
+                if (gameObject.getPosition().getY() < 0) {
+                    bulletsToBeRemoved.add(gameObject);
+                }
+                if (gameObject.getAccelerationDamperCounter() == gameObject.getAccelerationDamper()) {
+                    gameObject.setSpeed(Vector2D.sum(gameObject.getSpeed(),gameObject.getAcceleration()));
+                    gameObject.setAccelerationDamperCounter(0);
+                } else {
+                    gameObject.setAccelerationDamperCounter(gameObject.getAccelerationDamperCounter() + 1);
+                }
+            }
+        }
+        activeGameObjects.removeAll(bulletsToBeRemoved);
     }
 
     private void enemyShipMovement() {
@@ -184,74 +297,4 @@ public class SceneRunner extends Canvas implements Runnable {
         this.activeGameObjects.add(new GameObject(new Vector2D(playerX+33, playerY-8), BULLET_WIDTH, BULLET_HEIGHT, bulletSpriteImage, BULLET, new Vector2D(0, -3), new Vector2D(0,-3), 10));
     }
 
-    // ── Constructor ────────────────────────────────────────────────────────────
-    public SceneRunner() {
-        // Load image once here, not on every paint call
-        try {
-            shipImage = ImageIO.read(
-                    new File("src/main/java/org/example/SpaceShips/Ship_1.png"));
-        } catch (IOException e) {
-            throw new RuntimeException("Could not load ship image", e);
-        }
-
-        Thread animThread = new Thread(this);
-        animThread.setDaemon(true);
-        animThread.start();
-        setBackground(Color.BLACK);
-        this.activeGameObjects = new ArrayList<>();
-
-
-
-        BufferedImage bulletSprite = null;
-        try {
-            bulletSprite = ImageIO.read(new File("src/main/java/org/example/LaserSprites/01.png"));
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-        bulletSpriteImage = ImageUtilities.rotateBy(bulletSprite, ImageUtilities.Direction.WEST);
-
-
-        try {
-            enemyShipImage = ImageIO.read(new File("src/main/java/org/example/SpaceShips/Ship_4.png"));
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-        BufferedImage rotatedEnemyShipImage = ImageUtilities.rotateBy(enemyShipImage, ImageUtilities.Direction.SOUTH);
-
-        this.activeGameObjects.add(new GameObject(new Vector2D(100, 100), SHIP_SPRITE_SIZE, SHIP_SPRITE_SIZE, rotatedEnemyShipImage, ENEMY_SHIP_4, new Vector2D(ENEMY_SHIP_MOVE_SPEED, 0), new Vector2D(0, 0), 0));
-    }
-
-    // ── Entry point ────────────────────────────────────────────────────────────
-    public static void main(String[] args) {
-        Frame frame = new Frame("Sprite Visualization");
-        SceneRunner game = new SceneRunner();
-        frame.add(game);
-        frame.setSize(SCREEN_WIDTH, SCREEN_HEIGHT);
-        frame.setVisible(true);
-
-        frame.addKeyListener(new KeyAdapter() {
-            @Override
-            public void keyPressed(KeyEvent e) {
-                if (e.getKeyCode() == KeyEvent.VK_A)     game.movingLeft  = true;
-                if (e.getKeyCode() == KeyEvent.VK_D)     game.movingRight = true;
-                if (e.getKeyCode() == KeyEvent.VK_S)     game.movingDown = true;
-                if (e.getKeyCode() == KeyEvent.VK_W)     game.movingUp = true;
-                if (e.getKeyCode() == KeyEvent.VK_SPACE) game.shootingBullets = true;
-            }
-            @Override
-            public void keyReleased(KeyEvent e) {
-                if (e.getKeyCode() == KeyEvent.VK_A)     game.movingLeft  = false;
-                if (e.getKeyCode() == KeyEvent.VK_D)     game.movingRight = false;
-                if (e.getKeyCode() == KeyEvent.VK_S)     game.movingDown = false;
-                if (e.getKeyCode() == KeyEvent.VK_W)     game.movingUp = false;
-                if (e.getKeyCode() == KeyEvent.VK_SPACE) game.shootingBullets = false;
-            }
-        });
-
-        frame.addWindowListener(new WindowAdapter() {
-            public void windowClosing(WindowEvent e) {
-                System.exit(0);
-            }
-        });
-    }
 }
