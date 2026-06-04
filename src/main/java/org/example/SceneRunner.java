@@ -25,10 +25,11 @@ public class SceneRunner extends Canvas implements Runnable {
     public static final int SHIP_SPRITE_SIZE = 96;
     public static final String ENEMY_BULLET = "ENEMY_BULLET";
     public static final int ENEMY_BULLET_SPEED_VERTICAL = +3;
-    public static final int ENEMY_BULLET_SPEED_HORIZONTAL = 1;
+    public static final int ENEMY_BULLET_SPEED_HORIZONTAL = 2;
     private final int MOVE_SPEED = 5;
     private final int FPS = 120;
     private final int BULLET_COOLDOWN = 150;
+    private final int ENEMY_BULLET_COOLDOWN = 500;
     public static final String ENEMY_SHIP_4 = "enemy_ship_4";
     public static final String BULLET = "bullet";
 
@@ -169,7 +170,18 @@ public class SceneRunner extends Canvas implements Runnable {
         long frameDelay = 1000 / FPS;
 
         long saveLastTimeMillis = 0;
+        long curTimeMillis = 0;
+        long deltaTimeMillis = 0;
+        long timeSinceLastShotEnemy = 0;
+        long timeSinceLastShotPlayer = 0;
         while (true) {
+            curTimeMillis = System.currentTimeMillis();
+            if (saveLastTimeMillis == 0) {
+                saveLastTimeMillis = curTimeMillis; //initiate saveLastTime in first frame
+            }
+            deltaTimeMillis = curTimeMillis - saveLastTimeMillis;
+            saveLastTimeMillis = curTimeMillis;
+
             try {
                 Thread.sleep(frameDelay);
             } catch (InterruptedException e) {
@@ -190,23 +202,26 @@ public class SceneRunner extends Canvas implements Runnable {
                 playerY -= MOVE_SPEED;
             }
 
-            long currentTimeMillis = System.currentTimeMillis();
             if (shootingBullets) {
-                if (Math.abs(saveLastTimeMillis - currentTimeMillis) > BULLET_COOLDOWN  || saveLastTimeMillis == 0L) {
+                if (timeSinceLastShotPlayer > BULLET_COOLDOWN) {
                     spawnBullet(playerX, playerY);
-                    saveLastTimeMillis = System.currentTimeMillis();
+                    timeSinceLastShotPlayer = 0;
+                } else {
+                    timeSinceLastShotPlayer += deltaTimeMillis;
                 }
+            } else {
+                timeSinceLastShotPlayer += deltaTimeMillis;
             }
 
             enemyShipMovement();
 
-            currentTimeMillis = System.currentTimeMillis();
-            if (true) {
-                if (Math.abs(saveLastTimeMillis - currentTimeMillis) > BULLET_COOLDOWN  || saveLastTimeMillis == 0L) {
-                    enemyShipFireShots();
-                    saveLastTimeMillis = System.currentTimeMillis();
-                }
+            if (timeSinceLastShotEnemy > ENEMY_BULLET_COOLDOWN) {
+                enemyShipFireShots();
+                timeSinceLastShotEnemy = 0;
+            } else {
+                timeSinceLastShotEnemy += deltaTimeMillis;
             }
+
             gameObjectCinematicsAndOffsceneRemoval();
             detectCollisionsBetweenBulletsAndEnemyShips();
 //            logger.info("Number of active gameobjects: " + activeGameObjects.size());
@@ -220,9 +235,9 @@ public class SceneRunner extends Canvas implements Runnable {
         if (enemyShip == null) {
             return;
         }
-        this.activeGameObjects.add(new GameObject(enemyShip.getPosition(), BULLET_WIDTH, BULLET_HEIGHT, enemyBulletImage, ENEMY_BULLET, new Vector2D(0, ENEMY_BULLET_SPEED_VERTICAL), new Vector2D(0, 0), 0));
-        this.activeGameObjects.add(new GameObject(enemyShip.getPosition(), BULLET_WIDTH, BULLET_HEIGHT, enemyBulletImage, ENEMY_BULLET, new Vector2D(-ENEMY_BULLET_SPEED_HORIZONTAL, ENEMY_BULLET_SPEED_VERTICAL), new Vector2D(0, 0), 0));
-        this.activeGameObjects.add(new GameObject(enemyShip.getPosition(), BULLET_WIDTH, BULLET_HEIGHT, enemyBulletImage, ENEMY_BULLET, new Vector2D(+ENEMY_BULLET_SPEED_HORIZONTAL, ENEMY_BULLET_SPEED_VERTICAL), new Vector2D(0, 0), 0));
+        this.activeGameObjects.add(new GameObject(Vector2D.sum(enemyShip.getPosition(), new Vector2D(+23, +64)), BULLET_WIDTH, BULLET_HEIGHT, enemyBulletImage, ENEMY_BULLET, new Vector2D(0, ENEMY_BULLET_SPEED_VERTICAL), new Vector2D(0, 0), 0));
+        this.activeGameObjects.add(new GameObject(Vector2D.sum(enemyShip.getPosition(), new Vector2D(+23, +64)), BULLET_WIDTH, BULLET_HEIGHT, ImageUtilities.rotateBy(enemyBulletImage, Math.toDegrees(Math.atan((double) -ENEMY_BULLET_SPEED_HORIZONTAL/ (double) ENEMY_BULLET_SPEED_VERTICAL))), ENEMY_BULLET, new Vector2D(+ENEMY_BULLET_SPEED_HORIZONTAL, ENEMY_BULLET_SPEED_VERTICAL), new Vector2D(0, 0), 0));
+        this.activeGameObjects.add(new GameObject(Vector2D.sum(enemyShip.getPosition(), new Vector2D(+23, +64)), BULLET_WIDTH, BULLET_HEIGHT, ImageUtilities.rotateBy(enemyBulletImage, Math.toDegrees(Math.atan((double) +ENEMY_BULLET_SPEED_HORIZONTAL/ (double) ENEMY_BULLET_SPEED_VERTICAL))), ENEMY_BULLET, new Vector2D(-ENEMY_BULLET_SPEED_HORIZONTAL, ENEMY_BULLET_SPEED_VERTICAL), new Vector2D(0, 0), 0));
     }
 
     private GameObject retrieveGameObjectWithTag(String tag) {
