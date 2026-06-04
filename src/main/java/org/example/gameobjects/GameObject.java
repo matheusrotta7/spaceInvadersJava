@@ -1,4 +1,6 @@
-package org.example;
+package org.example.gameobjects;
+
+import org.example.Vector2D;
 
 import java.awt.image.BufferedImage;
 
@@ -18,6 +20,8 @@ public class GameObject {
     private int accelerationDamper;
     private int accelerationDamperCounter;
 
+    private boolean toBeDeleted;
+
     public GameObject(Vector2D position, int width, int height, BufferedImage sprite, String tag, Vector2D speed, Vector2D acceleration, int accelerationDamper) {
         this.position = position;
         this.width = width;
@@ -28,6 +32,15 @@ public class GameObject {
         this.acceleration = acceleration;
         this.accelerationDamper = accelerationDamper;
         this.accelerationDamperCounter = 0;
+        this.toBeDeleted = false;
+    }
+
+    public void onCollision(GameObject other) {
+
+    }
+
+    public void markForDeletion() {
+        this.toBeDeleted = true;
     }
 
     public Vector2D getPosition() {
@@ -100,5 +113,13 @@ public class GameObject {
 
     public void setAccelerationDamperCounter(int accelerationDamperCounter) {
         this.accelerationDamperCounter = accelerationDamperCounter;
+    }
+
+    public boolean isToBeDeleted() {
+        return toBeDeleted;
+    }
+
+    public void setToBeDeleted(boolean toBeDeleted) {
+        this.toBeDeleted = toBeDeleted;
     }
 }

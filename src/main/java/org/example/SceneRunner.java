@@ -1,5 +1,9 @@
 package org.example;
 
+import org.example.gameobjects.GameObject;
+import org.example.gameobjects.PlayerBullet;
+import org.example.gameobjects.PlayerShip;
+
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.event.KeyAdapter;
@@ -22,16 +26,20 @@ public class SceneRunner extends Canvas implements Runnable {
 
     public static final int SCREEN_WIDTH = 1920;
     public static final int SCREEN_HEIGHT = 1080;
-    public static final int SHIP_SPRITE_SIZE = 96;
-    public static final String ENEMY_BULLET = "ENEMY_BULLET";
+    public static final int PLAYER_SHIP_SPRITE_SIZE = 96;
     public static final int ENEMY_BULLET_SPEED_VERTICAL = +3;
     public static final int ENEMY_BULLET_SPEED_HORIZONTAL = 2;
-    private final int MOVE_SPEED = 5;
-    private final int FPS = 120;
-    private final int BULLET_COOLDOWN = 150;
-    private final int ENEMY_BULLET_COOLDOWN = 500;
+    private static final int MOVE_SPEED = 5;
+    private static final int FPS = 120;
+    private static final int BULLET_COOLDOWN = 150;
+    private static final int ENEMY_BULLET_COOLDOWN = 500;
+    private static final int PLAYER_INITIAL_X = 800;
+    private static final int PLAYER_INITIAL_Y = 800;
+
+    public static final String PLAYER_SHIP = "player_ship";
     public static final String ENEMY_SHIP_4 = "enemy_ship_4";
-    public static final String BULLET = "bullet";
+    public static final String PLAYER_BULLET = "player_bullet";
+    public static final String ENEMY_BULLET = "enemy_bullet";
 
     private boolean movingLeft  = false;
     private boolean movingRight = false;
@@ -39,8 +47,6 @@ public class SceneRunner extends Canvas implements Runnable {
     private boolean movingDown = false;
     private boolean shootingBullets = false;
 
-    private int playerX = 800;
-    private int playerY = 800;
 
     private BufferedImage shipImage;
     private BufferedImage bulletSpriteImage;
@@ -52,6 +58,9 @@ public class SceneRunner extends Canvas implements Runnable {
 
     // ── Constructor ────────────────────────────────────────────────────────────
     public SceneRunner() {
+
+
+        this.activeGameObjects = new ArrayList<>();
         // Load image once here, not on every paint call
         try {
             shipImage = ImageIO.read(
@@ -60,11 +69,12 @@ public class SceneRunner extends Canvas implements Runnable {
             throw new RuntimeException("Could not load ship image", e);
         }
 
+        this.activeGameObjects.add(new PlayerShip(new Vector2D(PLAYER_INITIAL_X, PLAYER_INITIAL_Y), PLAYER_SHIP_SPRITE_SIZE, PLAYER_SHIP_SPRITE_SIZE, shipImage, PLAYER_SHIP, new Vector2D(0, 0), new Vector2D(0, 0), 0));
+
         Thread animThread = new Thread(this);
         animThread.setDaemon(true);
         animThread.start();
         setBackground(Color.BLACK);
-        this.activeGameObjects = new ArrayList<>();
 
 
 
@@ -91,7 +101,7 @@ public class SceneRunner extends Canvas implements Runnable {
         }
         enemyBulletImage = ImageUtilities.rotateBy(enemyBulletImage, ImageUtilities.Direction.EAST);
 
-        this.activeGameObjects.add(new GameObject(new Vector2D(100, 100), SHIP_SPRITE_SIZE, SHIP_SPRITE_SIZE, rotatedEnemyShipImage, ENEMY_SHIP_4, new Vector2D(ENEMY_SHIP_MOVE_SPEED, 0), new Vector2D(0, 0), 0));
+        this.activeGameObjects.add(new GameObject(new Vector2D(100, 100), PLAYER_SHIP_SPRITE_SIZE, PLAYER_SHIP_SPRITE_SIZE, rotatedEnemyShipImage, ENEMY_SHIP_4, new Vector2D(ENEMY_SHIP_MOVE_SPEED, 0), new Vector2D(0, 0), 0));
     }
 
     // ── Entry point ────────────────────────────────────────────────────────────
@@ -150,10 +160,6 @@ public class SceneRunner extends Canvas implements Runnable {
         g2.setColor(getBackground());
         g2.fillRect(0, 0, getWidth(), getHeight());   // clear
 
-        if (shipImage != null) {
-            g2.drawImage(shipImage, playerX, playerY,
-                    SHIP_SPRITE_SIZE, SHIP_SPRITE_SIZE, null);
-        }
 
         for (GameObject gameObject : activeGameObjects) {
             g2.drawImage(gameObject.getSprite(), (int) Math.floor(gameObject.getPosition().getX()), (int) Math.floor(gameObject.getPosition().getY()), gameObject.getWidth(), gameObject.getHeight(), null);
@@ -189,22 +195,14 @@ public class SceneRunner extends Canvas implements Runnable {
                 break;
             }
 
-            if (movingLeft && playerX > 0) {
-                playerX -= MOVE_SPEED;
-            }
-            if (movingRight && playerX < SCREEN_WIDTH - SHIP_SPRITE_SIZE - 20) {
-                playerX += MOVE_SPEED;
-            }
-            if (movingDown && playerY < SCREEN_HEIGHT - SHIP_SPRITE_SIZE - SHIP_SPRITE_SIZE) {
-                playerY += MOVE_SPEED;
-            }
-            if (movingUp && playerY > 0) {
-                playerY -= MOVE_SPEED;
-            }
+            playerShipMovement();
 
             if (shootingBullets) {
                 if (timeSinceLastShotPlayer > BULLET_COOLDOWN) {
-                    spawnBullet(playerX, playerY);
+                    GameObject playerShip = retrieveGameObjectWithTag(PLAYER_SHIP);
+                    if (playerShip != null) {
+                        spawnBullet(playerShip.getPosition().getX(), playerShip.getPosition().getY());
+                    }
                     timeSinceLastShotPlayer = 0;
                 } else {
                     timeSinceLastShotPlayer += deltaTimeMillis;
@@ -224,10 +222,43 @@ public class SceneRunner extends Canvas implements Runnable {
 
             gameObjectCinematicsAndOffsceneRemoval();
             detectCollisionsBetweenBulletsAndEnemyShips();
+            deleteGameObjectsMarkedForDeletion();
 //            logger.info("Number of active gameobjects: " + activeGameObjects.size());
 
             repaint();
         }
+    }
+
+    private void playerShipMovement() {
+
+        GameObject playerShip = retrieveGameObjectWithTag(PLAYER_SHIP);
+
+        if (playerShip != null) {
+            if (movingLeft && playerShip.getPosition().getX() > 0) {
+                playerShip.setPosition(new Vector2D(playerShip.getPosition().getX() - MOVE_SPEED, playerShip.getPosition().getY()));
+            }
+            if (movingRight && playerShip.getPosition().getX() < SCREEN_WIDTH - PLAYER_SHIP_SPRITE_SIZE - 20) {
+                playerShip.setPosition(new Vector2D(playerShip.getPosition().getX() + MOVE_SPEED, playerShip.getPosition().getY()));
+            }
+            if (movingDown && playerShip.getPosition().getY() < SCREEN_HEIGHT - PLAYER_SHIP_SPRITE_SIZE - PLAYER_SHIP_SPRITE_SIZE) {
+                playerShip.setPosition(new Vector2D(playerShip.getPosition().getX(), playerShip.getPosition().getY() + MOVE_SPEED));
+            }
+            if (movingUp && playerShip.getPosition().getY() > 0) {
+                playerShip.setPosition(new Vector2D(playerShip.getPosition().getX(), playerShip.getPosition().getY() - MOVE_SPEED));
+            }
+
+        }
+
+    }
+
+    private void deleteGameObjectsMarkedForDeletion() {
+        ArrayList<GameObject> result = new ArrayList<>();
+        for (GameObject gameObject : activeGameObjects) {
+            if (!gameObject.isToBeDeleted()) {
+                result.add(gameObject);
+            }
+        }
+        this.activeGameObjects = result;
     }
 
     private void enemyShipFireShots() {
@@ -270,13 +301,12 @@ public class SceneRunner extends Canvas implements Runnable {
     }
 
     private void enemyShipMovement() {
-        for (GameObject gameObject : activeGameObjects) {
-            if (gameObject.getTag().equals(ENEMY_SHIP_4)) {
-                if (gameObject.getPosition().getX() > SCREEN_WIDTH - SHIP_SPRITE_SIZE) {
-                    gameObject.setSpeed(new Vector2D(-ENEMY_SHIP_MOVE_SPEED, 0));
-                } else if (gameObject.getPosition().getX() < 0) {
-                    gameObject.setSpeed(new Vector2D(ENEMY_SHIP_MOVE_SPEED, 0));
-                }
+        GameObject gameObject = retrieveGameObjectWithTag(ENEMY_SHIP_4);
+        if (gameObject != null) {
+            if (gameObject.getPosition().getX() > SCREEN_WIDTH - PLAYER_SHIP_SPRITE_SIZE) {
+                gameObject.setSpeed(new Vector2D(-ENEMY_SHIP_MOVE_SPEED, 0));
+            } else if (gameObject.getPosition().getX() < 0) {
+                gameObject.setSpeed(new Vector2D(ENEMY_SHIP_MOVE_SPEED, 0));
             }
         }
     }
@@ -284,18 +314,11 @@ public class SceneRunner extends Canvas implements Runnable {
     private void detectCollisionsBetweenBulletsAndEnemyShips() {
         for (int i = 0; i < activeGameObjects.size(); i++) {
             GameObject curGameObject = activeGameObjects.get(i);
-            if (curGameObject.getTag().equals(BULLET) || curGameObject.getTag().equals(ENEMY_SHIP_4)) { //"collidable" objects for now
-                for (int j = i + 1; j < activeGameObjects.size(); j++) {
-                    GameObject otherGameObject = activeGameObjects.get(j);
-                    if (gameObjectsOverlap(curGameObject, otherGameObject)) {
-                        if ((curGameObject.getTag().equals(BULLET) && otherGameObject.getTag().equals(ENEMY_SHIP_4))
-                                ||
-                            (curGameObject.getTag().equals(ENEMY_SHIP_4) && otherGameObject.getTag().equals(BULLET))
-                        ) {
-                            activeGameObjects.remove(curGameObject);
-                            activeGameObjects.remove(otherGameObject);
-                        }
-                    }
+            for (int j = i + 1; j < activeGameObjects.size(); j++) {
+                GameObject otherGameObject = activeGameObjects.get(j);
+                if (gameObjectsOverlap(curGameObject, otherGameObject)) {
+                    curGameObject.onCollision(otherGameObject);
+                    otherGameObject.onCollision(curGameObject);
                 }
             }
         }
@@ -308,8 +331,8 @@ public class SceneRunner extends Canvas implements Runnable {
                 a.getPosition().getY() + a.getHeight() > b.getPosition().getY();
     }
 
-    private void spawnBullet(int playerX, int playerY) {
-        this.activeGameObjects.add(new GameObject(new Vector2D(playerX+33, playerY-8), BULLET_WIDTH, BULLET_HEIGHT, bulletSpriteImage, BULLET, new Vector2D(0, -3), new Vector2D(0,-3), 10));
+    private void spawnBullet(double playerX, double playerY) {
+        this.activeGameObjects.add(new PlayerBullet(new Vector2D(playerX+33, playerY-8), BULLET_WIDTH, BULLET_HEIGHT, bulletSpriteImage, PLAYER_BULLET, new Vector2D(0, -3), new Vector2D(0,-3), 10));
     }
 
 }
