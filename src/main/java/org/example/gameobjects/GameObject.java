@@ -39,6 +39,10 @@ public class GameObject {
 
     }
 
+    public void onUpdate() {
+
+    }
+
     public void markForDeletion() {
         this.toBeDeleted = true;
     }

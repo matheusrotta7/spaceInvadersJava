@@ -1,5 +1,6 @@
 package org.example;
 
+import org.example.gameobjects.EnemyShip;
 import org.example.gameobjects.GameObject;
 import org.example.gameobjects.PlayerBullet;
 import org.example.gameobjects.PlayerShip;
@@ -22,7 +23,7 @@ public class SceneRunner extends Canvas implements Runnable {
 
     public static final int BULLET_WIDTH = 50;
     public static final int BULLET_HEIGHT = 80;
-    private static final double ENEMY_SHIP_MOVE_SPEED = 4;
+    public static final double ENEMY_SHIP_MOVE_SPEED = 4;
 
     public static final int SCREEN_WIDTH = 1920;
     public static final int SCREEN_HEIGHT = 1080;
@@ -55,7 +56,7 @@ public class SceneRunner extends Canvas implements Runnable {
     private BufferedImage enemyBulletImage;
     private BufferedImage backBuffer;     // off-screen buffer for double buffering
 
-    private ArrayList<GameObject> activeGameObjects;
+    private static ArrayList<GameObject> activeGameObjects;
 
     // ── Constructor ────────────────────────────────────────────────────────────
     public SceneRunner() {
@@ -102,7 +103,9 @@ public class SceneRunner extends Canvas implements Runnable {
         }
         enemyBulletImage = ImageUtilities.rotateBy(enemyBulletImage, ImageUtilities.Direction.EAST);
 
-        this.activeGameObjects.add(new GameObject(new Vector2D(100, 100), PLAYER_SHIP_SPRITE_SIZE, PLAYER_SHIP_SPRITE_SIZE, rotatedEnemyShipImage, ENEMY_SHIP_4, new Vector2D(ENEMY_SHIP_MOVE_SPEED, 0), new Vector2D(0, 0), 0));
+        activeGameObjects.add(new EnemyShip(new Vector2D(100, 100), PLAYER_SHIP_SPRITE_SIZE, PLAYER_SHIP_SPRITE_SIZE, rotatedEnemyShipImage, ENEMY_SHIP_4, new Vector2D(ENEMY_SHIP_MOVE_SPEED, 0), new Vector2D(0, 0), 0));
+        activeGameObjects.add(new EnemyShip(new Vector2D(200, 300), PLAYER_SHIP_SPRITE_SIZE, PLAYER_SHIP_SPRITE_SIZE, rotatedEnemyShipImage, ENEMY_SHIP_4, new Vector2D(ENEMY_SHIP_MOVE_SPEED, 0), new Vector2D(0, 0), 0));
+        activeGameObjects.add(new EnemyShip(new Vector2D(400, 400), PLAYER_SHIP_SPRITE_SIZE, PLAYER_SHIP_SPRITE_SIZE, rotatedEnemyShipImage, ENEMY_SHIP_4, new Vector2D(ENEMY_SHIP_MOVE_SPEED, 0), new Vector2D(0, 0), 0));
     }
 
     // ── Entry point ────────────────────────────────────────────────────────────
@@ -212,7 +215,9 @@ public class SceneRunner extends Canvas implements Runnable {
                 timeSinceLastShotPlayer += deltaTimeMillis;
             }
 
-            enemyShipMovement();
+            for (GameObject go : activeGameObjects) {
+                go.onUpdate();
+            }
 
             if (timeSinceLastShotEnemy > ENEMY_BULLET_COOLDOWN) {
                 enemyShipFireShots();
@@ -267,12 +272,12 @@ public class SceneRunner extends Canvas implements Runnable {
         if (enemyShip == null) {
             return;
         }
-        this.activeGameObjects.add(new GameObject(Vector2D.sum(enemyShip.getPosition(), new Vector2D(+23, +64)), BULLET_WIDTH, BULLET_HEIGHT, enemyBulletImage, ENEMY_BULLET, new Vector2D(0, ENEMY_BULLET_SPEED_VERTICAL), new Vector2D(0, 0), 0));
-        this.activeGameObjects.add(new GameObject(Vector2D.sum(enemyShip.getPosition(), new Vector2D(+23, +64)), BULLET_WIDTH, BULLET_HEIGHT, ImageUtilities.rotateBy(enemyBulletImage, Math.toDegrees(Math.atan((double) -ENEMY_BULLET_SPEED_HORIZONTAL/ (double) ENEMY_BULLET_SPEED_VERTICAL))), ENEMY_BULLET, new Vector2D(+ENEMY_BULLET_SPEED_HORIZONTAL, ENEMY_BULLET_SPEED_VERTICAL), new Vector2D(0, 0), 0));
-        this.activeGameObjects.add(new GameObject(Vector2D.sum(enemyShip.getPosition(), new Vector2D(+23, +64)), BULLET_WIDTH, BULLET_HEIGHT, ImageUtilities.rotateBy(enemyBulletImage, Math.toDegrees(Math.atan((double) +ENEMY_BULLET_SPEED_HORIZONTAL/ (double) ENEMY_BULLET_SPEED_VERTICAL))), ENEMY_BULLET, new Vector2D(-ENEMY_BULLET_SPEED_HORIZONTAL, ENEMY_BULLET_SPEED_VERTICAL), new Vector2D(0, 0), 0));
+        activeGameObjects.add(new GameObject(Vector2D.sum(enemyShip.getPosition(), new Vector2D(+23, +64)), BULLET_WIDTH, BULLET_HEIGHT, enemyBulletImage, ENEMY_BULLET, new Vector2D(0, ENEMY_BULLET_SPEED_VERTICAL), new Vector2D(0, 0), 0));
+        activeGameObjects.add(new GameObject(Vector2D.sum(enemyShip.getPosition(), new Vector2D(+23, +64)), BULLET_WIDTH, BULLET_HEIGHT, ImageUtilities.rotateBy(enemyBulletImage, Math.toDegrees(Math.atan((double) -ENEMY_BULLET_SPEED_HORIZONTAL/ (double) ENEMY_BULLET_SPEED_VERTICAL))), ENEMY_BULLET, new Vector2D(+ENEMY_BULLET_SPEED_HORIZONTAL, ENEMY_BULLET_SPEED_VERTICAL), new Vector2D(0, 0), 0));
+        activeGameObjects.add(new GameObject(Vector2D.sum(enemyShip.getPosition(), new Vector2D(+23, +64)), BULLET_WIDTH, BULLET_HEIGHT, ImageUtilities.rotateBy(enemyBulletImage, Math.toDegrees(Math.atan((double) +ENEMY_BULLET_SPEED_HORIZONTAL/ (double) ENEMY_BULLET_SPEED_VERTICAL))), ENEMY_BULLET, new Vector2D(-ENEMY_BULLET_SPEED_HORIZONTAL, ENEMY_BULLET_SPEED_VERTICAL), new Vector2D(0, 0), 0));
     }
 
-    private GameObject retrieveGameObjectWithTag(String tag) {
+    public static GameObject retrieveGameObjectWithTag(String tag) {
         for (GameObject gameObject : activeGameObjects) {
             if (gameObject.getTag().equals(tag)) {
                 return gameObject;
@@ -301,16 +306,7 @@ public class SceneRunner extends Canvas implements Runnable {
         return gameObject.getPosition().getY() < -SCREEN_MARGIN_BEFORE_DELETION || gameObject.getPosition().getY() > SCREEN_HEIGHT+SCREEN_MARGIN_BEFORE_DELETION || gameObject.getPosition().getX() < -SCREEN_MARGIN_BEFORE_DELETION || gameObject.getPosition().getX() > SCREEN_WIDTH+SCREEN_MARGIN_BEFORE_DELETION;
     }
 
-    private void enemyShipMovement() {
-        GameObject gameObject = retrieveGameObjectWithTag(ENEMY_SHIP_4);
-        if (gameObject != null) {
-            if (gameObject.getPosition().getX() > SCREEN_WIDTH - PLAYER_SHIP_SPRITE_SIZE) {
-                gameObject.setSpeed(new Vector2D(-ENEMY_SHIP_MOVE_SPEED, 0));
-            } else if (gameObject.getPosition().getX() < 0) {
-                gameObject.setSpeed(new Vector2D(ENEMY_SHIP_MOVE_SPEED, 0));
-            }
-        }
-    }
+
 
     private void detectCollisionsBetweenGameObjects() {
         for (int i = 0; i < activeGameObjects.size(); i++) {
