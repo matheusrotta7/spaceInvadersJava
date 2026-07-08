@@ -14,6 +14,7 @@ import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.logging.Logger;
 
@@ -29,12 +30,12 @@ public class SceneRunner extends Canvas implements Runnable {
     public static final int SCREEN_HEIGHT = 1080;
     public static final int SCREEN_MARGIN_BEFORE_DELETION = 100;
     public static final int PLAYER_SHIP_SPRITE_SIZE = 96;
-    public static final int ENEMY_BULLET_SPEED_VERTICAL = +3;
-    public static final int ENEMY_BULLET_SPEED_HORIZONTAL = 2;
+    public static final int ENEMY_BULLET_SPEED_VERTICAL = +1;
+    public static final int ENEMY_BULLET_SPEED_HORIZONTAL = 1;
     private static final int MOVE_SPEED = 5;
     private static final int FPS = 120;
     private static final int BULLET_COOLDOWN = 150;
-    private static final int ENEMY_BULLET_COOLDOWN = 500;
+    public static final int ENEMY_BULLET_COOLDOWN = 1000;
     private static final int PLAYER_INITIAL_X = 800;
     private static final int PLAYER_INITIAL_Y = 800;
 
@@ -50,19 +51,20 @@ public class SceneRunner extends Canvas implements Runnable {
     private boolean shootingBullets = false;
 
 
-    private BufferedImage shipImage;
-    private BufferedImage bulletSpriteImage;
-    private BufferedImage enemyShipImage;
-    private BufferedImage enemyBulletImage;
-    private BufferedImage backBuffer;     // off-screen buffer for double buffering
+    public static BufferedImage shipImage;
+    public static BufferedImage bulletSpriteImage;
+    public static BufferedImage enemyShipImage;
+    public static BufferedImage enemyBulletImage;
+    public static BufferedImage backBuffer;     // off-screen buffer for double buffering
 
-    private static ArrayList<GameObject> activeGameObjects;
+    public static ArrayList<GameObject> activeGameObjects;
+    public static ArrayList<GameObject> gameObjectsToBeCreated = new ArrayList<>();
 
     // ── Constructor ────────────────────────────────────────────────────────────
     public SceneRunner() {
 
 
-        this.activeGameObjects = new ArrayList<>();
+        activeGameObjects = new ArrayList<>();
         // Load image once here, not on every paint call
         try {
             shipImage = ImageIO.read(
@@ -71,7 +73,7 @@ public class SceneRunner extends Canvas implements Runnable {
             throw new RuntimeException("Could not load ship image", e);
         }
 
-        this.activeGameObjects.add(new PlayerShip(new Vector2D(PLAYER_INITIAL_X, PLAYER_INITIAL_Y), PLAYER_SHIP_SPRITE_SIZE, PLAYER_SHIP_SPRITE_SIZE, shipImage, PLAYER_SHIP, new Vector2D(0, 0), new Vector2D(0, 0), 0));
+        activeGameObjects.add(new PlayerShip(new Vector2D(PLAYER_INITIAL_X, PLAYER_INITIAL_Y), PLAYER_SHIP_SPRITE_SIZE, PLAYER_SHIP_SPRITE_SIZE, shipImage, PLAYER_SHIP, new Vector2D(0, 0), new Vector2D(0, 0), 0));
 
         Thread animThread = new Thread(this);
         animThread.setDaemon(true);
@@ -182,7 +184,7 @@ public class SceneRunner extends Canvas implements Runnable {
         long saveLastTimeMillis = 0;
         long curTimeMillis = 0;
         long deltaTimeMillis = 0;
-        long timeSinceLastShotEnemy = 0;
+
         long timeSinceLastShotPlayer = 0;
         while (true) {
             curTimeMillis = System.currentTimeMillis();
@@ -216,15 +218,12 @@ public class SceneRunner extends Canvas implements Runnable {
             }
 
             for (GameObject go : activeGameObjects) {
-                go.onUpdate();
+                go.onUpdate(deltaTimeMillis);
             }
 
-            if (timeSinceLastShotEnemy > ENEMY_BULLET_COOLDOWN) {
-                enemyShipFireShots();
-                timeSinceLastShotEnemy = 0;
-            } else {
-                timeSinceLastShotEnemy += deltaTimeMillis;
-            }
+            activeGameObjects.addAll(gameObjectsToBeCreated); //add here after the update loop otherwise there is co-modification
+
+
 
             gameObjectCinematicsAndOffsceneRemoval();
             detectCollisionsBetweenGameObjects();
@@ -267,15 +266,7 @@ public class SceneRunner extends Canvas implements Runnable {
         this.activeGameObjects = result;
     }
 
-    private void enemyShipFireShots() {
-        GameObject enemyShip = retrieveGameObjectWithTag(ENEMY_SHIP_4);
-        if (enemyShip == null) {
-            return;
-        }
-        activeGameObjects.add(new GameObject(Vector2D.sum(enemyShip.getPosition(), new Vector2D(+23, +64)), BULLET_WIDTH, BULLET_HEIGHT, enemyBulletImage, ENEMY_BULLET, new Vector2D(0, ENEMY_BULLET_SPEED_VERTICAL), new Vector2D(0, 0), 0));
-        activeGameObjects.add(new GameObject(Vector2D.sum(enemyShip.getPosition(), new Vector2D(+23, +64)), BULLET_WIDTH, BULLET_HEIGHT, ImageUtilities.rotateBy(enemyBulletImage, Math.toDegrees(Math.atan((double) -ENEMY_BULLET_SPEED_HORIZONTAL/ (double) ENEMY_BULLET_SPEED_VERTICAL))), ENEMY_BULLET, new Vector2D(+ENEMY_BULLET_SPEED_HORIZONTAL, ENEMY_BULLET_SPEED_VERTICAL), new Vector2D(0, 0), 0));
-        activeGameObjects.add(new GameObject(Vector2D.sum(enemyShip.getPosition(), new Vector2D(+23, +64)), BULLET_WIDTH, BULLET_HEIGHT, ImageUtilities.rotateBy(enemyBulletImage, Math.toDegrees(Math.atan((double) +ENEMY_BULLET_SPEED_HORIZONTAL/ (double) ENEMY_BULLET_SPEED_VERTICAL))), ENEMY_BULLET, new Vector2D(-ENEMY_BULLET_SPEED_HORIZONTAL, ENEMY_BULLET_SPEED_VERTICAL), new Vector2D(0, 0), 0));
-    }
+
 
     public static GameObject retrieveGameObjectWithTag(String tag) {
         for (GameObject gameObject : activeGameObjects) {

@@ -39,7 +39,7 @@ public class GameObject {
 
     }
 
-    public void onUpdate() {
+    public void onUpdate(long deltaTimeMillis) {
 
     }
 
